@@ -12,14 +12,16 @@
 // [ ] Use the aleoswap pool price for reference
 // [x] Work out how token transfer / ownership works
 // [x] Work out how a program can 'own' funds
-// [ ] Have a store of balance of tokens for address so it can be transferred - has to be different from loan amounts for maths
+// [x] Have a store of balance of tokens for address so it can be transferred - has to be different from loan amounts for maths
 
 // The 'leotoken' program.
 program leotoken.aleo {
     // Mapping of supplied collateral balances for addresses
     mapping collateral_balances: address => u32;
-    // Mapping of issues tokens against collateral
+    // Mapping of issued tokens against collateral
     mapping issued_amount: address => u32;
+    // Mapping of LEOTokens for each address
+    mapping balances: address => u32;
 
     // LEO stable token
     // - 'owner'  : The address of the account that owns the record associated with this token.
@@ -27,6 +29,23 @@ program leotoken.aleo {
     record Token {
         owner: address,
         amount: u32,
+    }
+
+    //////////////////////////////////////////////////////////
+    // transfer
+    //
+    // Tranfer LEOTokens from address to address
+    transition transfer(token: Token, amount: u32, destination: address) {
+        // Only the owner can transfer their funds
+        assert_eq(token.owner, self.caller);
+        return finalize(token, amount, destination);
+    }
+
+    finalize transfer(token: Token, amount: u32, destination: address) {
+        let current_amount_sender: u32 = Mapping::get_or_use(balances, token.owner, 0u32);
+        Mapping::set(balances, token.owner, current_amount_sender - amount);
+        let current_amount_recv: u32 = Mapping::get_or_use(balances, destination, 0u32);
+        Mapping::set(balances, token.owner, current_amount_recv + amount);
     }
 
     //////////////////////////////////////////////////////////
@@ -85,6 +104,7 @@ program leotoken.aleo {
     //
     // Mint tokens against the collateral supplied
     transition mint_token(recipient: address, amount: u32) -> Token {
+        // LEOToken amounts
         let token: Token = Token {
             owner: recipient,
             amount: amount,
@@ -107,6 +127,10 @@ program leotoken.aleo {
         // Check that it will not violate health factor of loan
         assert_eq(health_factor >= get_min_health_factor(), true);
         Mapping::set(issued_amount, recipient, loaned + amount);
+
+        // Add newly minted tokens to address balance
+        let address_balance: u32 = Mapping::get_or_use(balances, recipient, 0u32);
+        Mapping::set(balances, recipient, address_balance + amount);
     }
 
     //////////////////////////////////////////////////////////
@@ -114,11 +138,7 @@ program leotoken.aleo {
     //
     // Return minted tokens to burn supply and unlock collateral
     transition burn_token(recipient: address, amount: u32, period: u32) -> Token {
-        let token: Token = Token {
-            owner: recipient,
-            amount: amount,
-        };
-        return token then finalize(recipient, amount, period);
+        return finalize(recipient, amount, period);
     }
 
     finalize burn_token(recipient: address, amount: u32, period: u32) {
@@ -129,7 +149,11 @@ program leotoken.aleo {
         assert_eq(amount <= loaned, true);
         // Can't repay if nothing has been loaned
         assert_eq(loaned > 0u32, true);
-        
+
+        let address_balance: u32 = Mapping::get_or_use(balances, recipient, 0u32);
+        // Can't burn more than available
+        assert_eq(amount > address_balance, true);
+       
         let current_price: u32 = get_collateral_price();
 
         let scaling: u32 = 100u32;
@@ -156,8 +180,8 @@ program leotoken.aleo {
         // Reduce amount of issued tokens
         Mapping::set(issued_amount, recipient, loaned - amount);
 
-        // TODO recalc health factor now?
-        // TODO what happens if as a result of burning and repaying the new health factor is too low?
+        // Reduce the amount of tokens availble
+        Mapping::set(balances, recipient, address_balance - amount);
     }
 
     //////////////////////////////////////////////////////////
@@ -185,11 +209,9 @@ program leotoken.aleo {
         // Make sure the amount being offered is sufficient to repay the loan
         assert_eq(loaned_liquidatee, amount);
 
-        let loaned_liquidator : u32 = Mapping::get_or_use(issued_amount, liquidator, 0u32);
+        let balance_liquidator : u32 = Mapping::get_or_use(balances, liquidator, 0u32);
         // Check the liquidator actually has the tokens to pay
-        assert_eq(loaned_liquidator >= amount, true);
-
-        let collateral_supplied_liquidator: u32 = Mapping::get_or_use(collateral_balances, liquidator, 0u32);
+        assert_eq(balance_liquidator >= amount, true);
 
         // Calculate reward from security fund
         let collateral_security_fund: u32 = Mapping::get_or_use(collateral_balances, get_treasury_address(), 0u32);
@@ -200,6 +222,7 @@ program leotoken.aleo {
         let collateral_reward: u32 = scaled_collateral_reward / scaling;
 
         // Liquidate the loan
+        let collateral_supplied_liquidator: u32 = Mapping::get_or_use(collateral_balances, liquidator, 0u32);
 
         // liquidator (person initiating the liquidation) gains the collateral
         Mapping::set(collateral_balances, liquidator, collateral_supplied_liquidator + collateral_supplied_liquidatee + collateral_reward);
@@ -209,8 +232,9 @@ program leotoken.aleo {
         Mapping::set(collateral_balances, get_treasury_address(), collateral_security_fund - collateral_reward);
         
         // liquidator (person initiating the liquidation) sends the tokens to repay the debt
-        Mapping::set(issued_amount, liquidator, loaned_liquidator - amount);
-        // liquidatee (person being liquidated) loses their tokens (if they still have them)
+        Mapping::set(balances, liquidator, balance_liquidator - amount);
+        // IMPROVEMENT: liquidatee (person being liquidated) loses their tokens (if they still have them) and these are used for (partial?) payment of the loan
+        // loan now repaid for liqudatee
         Mapping::set(issued_amount, liquidatee, 0u32);
     }
 
