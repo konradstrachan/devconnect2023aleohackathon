@@ -3,5 +3,4 @@
 *.prover
 *.verifier
 outputs/
-/build/*.aleo
 /build
