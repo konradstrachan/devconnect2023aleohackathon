@@ -1,5 +1,7 @@
 # LEUSD token - an algorithmic stablecoin
 
+![image](https://github.com/konradstrachan/leotoken/assets/21056525/f955ea85-34f0-4852-b078-60924bbed95e)
+
 ## Overview
 
 LEUSD is an algorithmic stablecoin smart contract built in Leo language for the Aleo blockchain. The stablecoin is designed to maintain a peg to the US Dollar by using a over-collateral basket of underlying assets to borrow against and insulate it's value.
