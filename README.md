@@ -6,13 +6,13 @@ LEUSD is an algorithmic stablecoin smart contract built in Leo language for the 
 
 The design was largely influenced by Maker DAI in that it is designed to provide stability through overcollateralization with a diverse underlying basket of assets picked based on their liquidity and relative price stability. For LEUSD a single underlying token is used as the collateral, however this can be extended to many others with small additions to the logic (see future work).
 
-LEUSD relies on market efficiencies to ensure DEXes on Aleo correctly reflect the value of the tokens traded. The value of the collateral tokens used for LEUSD are taken from DEXes directly by infering based on AMM pool ratios (see notes).
+LEUSD relies on market efficiencies to ensure DEXes on Aleo correctly reflect the value of the tokens traded. The value of the collateral tokens used for LEUSD are taken from DEXes directly by inferring based on AMM pool ratios (see notes).
 
 From a collateralised position, a user can mint LEUSD as long as they don't exceed 125% collaterlisation threshold (health factor) of collateral to minted stable tokens.
 
 Loans of tokens are not interest free, there is a small interest charged on LEUSD tokens compounded daily which is paid when the tokens are burnt to regain access to the underlying collateral. Interest is collected by the Treasury and used as an incentive to liquidators to settle any loans that have been deemed to be a risk based on the health factor.
 
-Once LEUSD tokens have been loaned to a user changes in the price of the underlying collateral tokens can lead to changes in the health factor of the loan. If the collateral loses value causing the collateralisation threshold to drop below 125%, there is an economic incentive for anyone (including the owner of the loaned tokens) to pay back to loan. Paying back the loan will return the underlying collateral to anyone to liquidates the loan as well as a reward taken from the LEUSD token treasury (see below).
+Once LEUSD tokens have been loaned to a user, changes in the price of the underlying collateral tokens can lead to changes in the health factor of the loan. If the collateral loses value causing the collateralisation threshold to drop below 125%, there is an economic incentive for anyone (including the owner of the loaned tokens) to pay back the loan. Paying back the loan will return the underlying collateral to anyone to liquidate the loan as well as a reward taken from the LEUSD token treasury (see below).
 
 ## Features
 
