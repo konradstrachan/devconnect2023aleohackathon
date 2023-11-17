@@ -38,14 +38,14 @@ program leotoken.aleo {
     transition transfer(token: Token, amount: u32, destination: address) {
         // Only the owner can transfer their funds
         assert_eq(token.owner, self.caller);
-        return finalize(token, amount, destination);
+        return then finalize(token.owner, amount, destination);
     }
 
-    finalize transfer(token: Token, amount: u32, destination: address) {
-        let current_amount_sender: u32 = Mapping::get_or_use(balances, token.owner, 0u32);
-        Mapping::set(balances, token.owner, current_amount_sender - amount);
+    finalize transfer(owner: address, amount: u32, destination: address) {
+        let current_amount_sender: u32 = Mapping::get_or_use(balances, owner, 0u32);
+        Mapping::set(balances, owner, current_amount_sender - amount);
         let current_amount_recv: u32 = Mapping::get_or_use(balances, destination, 0u32);
-        Mapping::set(balances, token.owner, current_amount_recv + amount);
+        Mapping::set(balances, owner, current_amount_recv + amount);
     }
 
     //////////////////////////////////////////////////////////
@@ -138,7 +138,7 @@ program leotoken.aleo {
     //
     // Return minted tokens to burn supply and unlock collateral
     transition burn_token(recipient: address, amount: u32, period: u32) -> Token {
-        return finalize(recipient, amount, period);
+        return then finalize(recipient, amount, period);
     }
 
     finalize burn_token(recipient: address, amount: u32, period: u32) {
@@ -166,8 +166,8 @@ program leotoken.aleo {
 
         // Calculate the fee paid to the treasury
         // This is done by how long the loan has been open * interest rate
-        let scaled_interest_accumulated u32: = get_interest_accumulated(collateral_supplied, period);
-        let interest_accumulated u32: = scaled_interest_accumulated / 100u32;
+        let scaled_interest_accumulated: u32 = get_interest_accumulated(collateral_supplied, period);
+        let interest_accumulated: u32 = scaled_interest_accumulated / 100u32;
 
         // Reduce collateral accordingly taking the fee
         Mapping::set(collateral_balances, recipient, collateral_supplied - interest_accumulated);
@@ -188,8 +188,8 @@ program leotoken.aleo {
     // liquidate_position
     //
     // If a position falls below the health factor it can be liquidated by anyone
-    transition liquidate_position(liquidator: address, amount: u32, liquidatee: address) -> Token { 
-        return finalize(liquidator, amount, liquidatee);
+    transition liquidate_position(liquidator: address, amount: u32, liquidatee: address) { 
+        return then finalize(liquidator, amount, liquidatee);
     }
 
     finalize liquidate_position(liquidator: address, amount: u32, liquidatee: address) {
