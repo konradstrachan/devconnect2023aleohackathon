@@ -3,16 +3,16 @@
 // [x] borrow token (up to health factor) for address
 // [x] Repay token and interest
 // [x] Interest paid to protocol safety fund on redemption
-// [ ] Health factor based liquidations by anyone
-//     [ ] Earn part of safety fund
-//     [ ] loan amount / all loan amounts => fractional share of safety fund
+// [x] Health factor based liquidations by anyone
+//     [x] Earn part of safety fund
+//     [x] loan amount / all loan amounts => fractional share of safety fund
 //     [ ] scaling factor based on health factor ?
-//     [ ] Incentivise others to liquidate loan
+//     [x] Incentivise others to liquidate loan
 //
 // [ ] Use the aleoswap pool price for reference
-// [ ] Work out how token transfer / ownership works
-// [ ] Work out how a program can 'own' funds
-//
+// [x] Work out how token transfer / ownership works
+// [x] Work out how a program can 'own' funds
+// [ ] Have a store of balance of tokens for address so it can be transferred - has to be different from loan amounts for maths
 
 // The 'leotoken' program.
 program leotoken.aleo {
@@ -23,20 +23,11 @@ program leotoken.aleo {
 
     // LEO stable token
     // - 'owner'  : The address of the account that owns the record associated with this token.
-    // - 'amount' : The amount of tokens owned by the account.
-    // TODO store interest rate and starting time to work out interest?
+    // - 'amount' : The amount of tokens
     record Token {
         owner: address,
         amount: u32,
     }
-
-    // Security treasury for storing fees generated from loaded tokens
-    // Used to incentivise the repayment of other loans that fall
-    // below the safe health score
-    /*record Treasury {
-        owner: address,
-        amount: u32,
-    }*/
 
     //////////////////////////////////////////////////////////
     // deposit_collateral
@@ -172,9 +163,56 @@ program leotoken.aleo {
     //////////////////////////////////////////////////////////
     // liquidate_position
     //
-    // 
-    
-    // TODO
+    // If a position falls below the health factor it can be liquidated by anyone
+    transition liquidate_position(liquidator: address, amount: u32, liquidatee: address) -> Token { 
+        return finalize(liquidator, amount, liquidatee);
+    }
+
+    finalize liquidate_position(liquidator: address, amount: u32, liquidatee: address) {
+        // First verify that the health factor of the loan has breached the risk threshold
+        let collateral_supplied_liquidatee: u32 = Mapping::get_or_use(collateral_balances, liquidatee, 0u32);
+        let loaned_liquidatee : u32 = Mapping::get_or_use(issued_amount, liquidatee, 0u32);
+
+        let current_price: u32 = get_collateral_price();
+
+        let scaling: u32 = 100u32;
+        let scaled_collateral_supplied_liquidatee: u32 = collateral_supplied_liquidatee * scaling;
+        let scaled_loaned_liquidatee: u32 = loaned_liquidatee * scaling;
+
+        let health_factor: u32 = calc_health_factor(scaled_collateral_supplied_liquidatee, scaled_loaned_liquidatee, current_price);
+        // Check that the health factor of loan has fallen below liquidation threshold
+        assert_eq(health_factor < get_min_health_factor(), true);
+        // Make sure the amount being offered is sufficient to repay the loan
+        assert_eq(loaned_liquidatee, amount);
+
+        let loaned_liquidator : u32 = Mapping::get_or_use(issued_amount, liquidator, 0u32);
+        // Check the liquidator actually has the tokens to pay
+        assert_eq(loaned_liquidator >= amount, true);
+
+        let collateral_supplied_liquidator: u32 = Mapping::get_or_use(collateral_balances, liquidator, 0u32);
+
+        // Calculate reward from security fund
+        let collateral_security_fund: u32 = Mapping::get_or_use(collateral_balances, get_treasury_address(), 0u32);
+        let scaled_collateral_security_fund: u32 = collateral_security_fund * scaling;
+        
+        // get reward which is 10% of the current treasury
+        let scaled_collateral_reward: u32 = util_divide(collateral_security_fund, 10u32, scaling);
+        let collateral_reward: u32 = scaled_collateral_reward / scaling;
+
+        // Liquidate the loan
+
+        // liquidator (person initiating the liquidation) gains the collateral
+        Mapping::set(collateral_balances, liquidator, collateral_supplied_liquidator + collateral_supplied_liquidatee + collateral_reward);
+        // liquidatee (person being liquidated) loses their collateral
+        Mapping::set(collateral_balances, liquidatee, 0u32);
+        // reduce fund by reward that has been paid
+        Mapping::set(collateral_balances, get_treasury_address(), collateral_security_fund - collateral_reward);
+        
+        // liquidator (person initiating the liquidation) sends the tokens to repay the debt
+        Mapping::set(issued_amount, liquidator, loaned_liquidator - amount);
+        // liquidatee (person being liquidated) loses their tokens (if they still have them)
+        Mapping::set(issued_amount, liquidatee, 0u32);
+    }
 
     //////////////////////////////////////////////////////////
     // 
@@ -203,7 +241,7 @@ program leotoken.aleo {
         let scaling: u32 = 100u32;
 
         let scaled_interest_amount: u32 = loan * scaling;
-        let scaled_rate_per_period: u32 = util_divide(get_periods_in_year() * scaling, get_interest_apy() * scaling, scaling);
+        let scaled_rate_per_period: u32 = util_divide(get_periods_in_year() * scaling, get_interest_apy(), scaling);
 
         // TODO: how can this be better, this enforces an upper limit
         // and results in a useless number of cycles
@@ -213,13 +251,14 @@ program leotoken.aleo {
             }
         }
 
+        // TODO test maths
         return scaled_interest_amount;
     }
 
     inline get_collateral_price() -> u32 {
         // TODO actually look up based on the token
-        // TODO currently returning a static price 1.25 TOKEN == 1 USD
-        return 125u32;
+        // TODO currently returning a static price 2.25 TOKEN == 1 USD
+        return 225u32;
     }
 
     inline get_min_health_factor() -> u32 {
