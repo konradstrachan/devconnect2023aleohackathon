@@ -20,7 +20,7 @@ program leotoken.aleo {
     mapping collateral_balances: address => u32;
     // Mapping of issued tokens against collateral
     mapping issued_amount: address => u32;
-    // Mapping of LEOTokens for each address
+    // Mapping of LEUSD owned for each address
     mapping balances: address => u32;
 
     // LEO stable token
@@ -38,11 +38,13 @@ program leotoken.aleo {
     transition transfer(token: Token, amount: u32, destination: address) {
         // Only the owner can transfer their funds
         assert_eq(token.owner, self.caller);
+        assert_eq(token.amount >= amount, true);
         return then finalize(token.owner, amount, destination);
     }
 
     finalize transfer(owner: address, amount: u32, destination: address) {
         let current_amount_sender: u32 = Mapping::get_or_use(balances, owner, 0u32);
+        assert_eq(current_amount_sender >= amount, true);
         Mapping::set(balances, owner, current_amount_sender - amount);
         let current_amount_recv: u32 = Mapping::get_or_use(balances, destination, 0u32);
         Mapping::set(balances, owner, current_amount_recv + amount);
@@ -54,6 +56,7 @@ program leotoken.aleo {
     // Deposit collateral which can then be borrowed against
     // Improvements : multitoken collateral
     transition deposit_collateral(token: Token, amount: u32) -> Token {
+        // Checks the token has sufficient balance, will fail if overflow
         let difference: u32 = token.amount - amount;
 
         let remaining: Token = Token {
