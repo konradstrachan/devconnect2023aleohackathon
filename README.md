@@ -1,5 +1,7 @@
 # LEUSD token - an algorithmic stablecoin
 
+🏆 This project won the ​Archblock Bounty on zkHackathon by Aleo in Istanbul during DevConnect 2023 🇹🇷
+
 ![image](https://github.com/konradstrachan/leotoken/assets/21056525/f955ea85-34f0-4852-b078-60924bbed95e)
 
 ## Overview
